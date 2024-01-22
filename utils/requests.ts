@@ -67,7 +67,7 @@ export const getUTXOs: (
 ) => Promise<{
   unspent_outputs: Array<BlockchainResponse.UTXO>
 }> = async (address, options = { confirmations: '1', limit: '1000' }) =>
-  fetch(`${API_ENDPOINT}unspent?${new URLSearchParams({ ...options, active: address })}`).then((res) => res.json())
+  fetch(`${API_ENDPOINT}/unspent?${new URLSearchParams({ ...options, active: address })}`).then((res) => res.json())
 
 export const getTx: (hash: string) => Promise<BlockchainResponse.Tx> = async (hash) =>
-  fetch(`${API_ENDPOINT}rawtx/${hash}`).then((res) => res.json())
+  fetch(`${API_ENDPOINT}/rawtx/${hash}`).then((res) => res.json())
