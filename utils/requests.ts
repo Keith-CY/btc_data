@@ -59,6 +59,12 @@ export module BlockchainResponse {
       addr: string
     }>
   }
+
+  export interface Balance {
+    final_balance: number
+    n_tx: number
+    total_received: number
+  }
 }
 
 export const getUTXOs: (
@@ -69,5 +75,8 @@ export const getUTXOs: (
 }> = async (address, options = { confirmations: '1', limit: '1000' }) =>
   fetch(`${API_ENDPOINT}/unspent?${new URLSearchParams({ ...options, active: address })}`).then((res) => res.json())
 
-export const getTx: (hash: string) => Promise<BlockchainResponse.Tx> = async (hash) =>
+export const getTx: (hash: string) => Promise<BlockchainResponse.Tx> = (hash) =>
   fetch(`${API_ENDPOINT}/rawtx/${hash}`).then((res) => res.json())
+
+export const getBalance: (address: string) => Promise<{ [address: string]: BlockchainResponse.Balance }> = (address) =>
+  fetch(`${API_ENDPOINT}/balance?${new URLSearchParams({ active: address })}`).then((res) => res.json())

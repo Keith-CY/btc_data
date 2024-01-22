@@ -3,7 +3,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useWallet } from '@/app/hooks'
-import { getUTXOs, getTx } from '@/utils/requests'
+import { getBalance, getUTXOs, getTx, BlockchainResponse } from '@/utils/requests'
 import { EXPLORER } from '@/utils'
 
 const Content = () => {
@@ -33,6 +33,14 @@ const Content = () => {
       }
     }
   }
+
+  const { data: balance } = useQuery({
+    queryKey: ['balance', address],
+    queryFn: () => (address ? getBalance(address).then((res) => res?.[address]?.final_balance ?? 0) : null),
+    enabled: !!address,
+  })
+
+  // const balance = address !== null && balances ? balances[address as keyof BlockchainResponse.Balance] ?? 0 : 0
 
   const { data: utxos } = useQuery({
     queryKey: ['utxo', address],
@@ -75,6 +83,7 @@ const Content = () => {
       <section>
         <WalletBtn />
         <div>{`UTXOs of ${address}`}</div>
+        <div>{`Balance: ${balance?.toString() ?? '-'}`}</div>
 
         <table>
           <thead>
