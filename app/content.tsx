@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useWallet } from '@/app/hooks'
 import { getBalance, getUTXOs, getTx, BlockchainResponse } from '@/utils/requests'
@@ -50,66 +50,113 @@ const Content = () => {
 
   const txList = utxos?.unspent_outputs.map((utxo) => utxo.tx_hash_big_endian) ?? []
 
-  const { data: txs = [] } = useQuery({
-    queryKey: ['txs', txList.join(',')],
-    queryFn: () =>
-      Promise.allSettled(txList.map((tx) => getTx(tx))).then((res) =>
-        res.map((i) => (i.status === 'fulfilled' ? i.value : null))
-      ),
-    enabled: !!txList.length,
+  const txQueries = useQueries({
+    queries: txList.map((tx) => ({
+      queryKey: ['tx', tx],
+      queryFn: () => getTx(tx),
+      enabled: !!tx,
+    })),
   })
 
   const list = useMemo(() => {
     return (
       utxos?.unspent_outputs.map((utxo) => {
-        const tx = txs.find((tx) => tx?.hash === utxo.tx_hash_big_endian)
+        const tx = txQueries.find((q) => q.isSuccess && q.data.hash === utxo.tx_hash_big_endian)?.data
+        const days = tx ? dayjs().diff(dayjs.unix(tx.time), 'day') : '-'
+        const coinday = typeof days === 'number' ? BigInt(days) * BigInt(`0x${utxo.value_hex}`) : '-'
+
         return {
           ...utxo,
-          days: tx?.time ? dayjs().diff(dayjs.unix(tx.time), 'day') : '-',
+          days,
+          coinday: `${coinday}`,
         }
       }) ?? []
     )
-  }, [utxos, txs])
+  }, [utxos, txQueries])
 
   const WalletBtn = () => {
     if (wallet.addr) {
-      return <button onClick={onWalletSwitch}>Disconnect</button>
+      return (
+        <button
+          className="px-4 py-2 font-semibold text-sm bg-cyan-500 text-white rounded-full shadow-sm"
+          onClick={onWalletSwitch}
+        >
+          Disconnect
+        </button>
+      )
     }
-    return <button onClick={onWalletSwitch}>Connect</button>
+    return (
+      <button
+        className="px-4 py-2 font-semibold text-sm bg-cyan-500 text-white rounded-full shadow-sm"
+        onClick={onWalletSwitch}
+      >
+        Connect
+      </button>
+    )
   }
 
   if (utxos?.unspent_outputs.length) {
     return (
-      <section>
-        <WalletBtn />
-        <div>{`UTXOs of ${address}`}</div>
-        <div>{`Balance: ${balance?.toString() ?? '-'}`}</div>
-
-        <table>
-          <thead>
-            <tr>
-              <th align="left">tx_hash_big_endian</th>
-              <th align="left">tx_output_n</th>
-              <th align="left">value</th>
-              <th align="left">days</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((utxo) => (
-              <tr key={utxo.tx_hash_big_endian}>
-                <td>
-                  <a href={`${EXPLORER}/tx/${utxo.tx_hash_big_endian}`} rel="noopener noreferrer" target="_blank">
-                    <code>{utxo.tx_hash_big_endian}</code>
-                  </a>
-                </td>
-                <td>{utxo.tx_output_n}</td>
-                <td>{BigInt(`0x${utxo.value_hex}`).toString()}</td>
-                <td>{utxo.days}</td>
+      <div className="flex flex-col">
+        <section>
+          <WalletBtn />
+          <div>{`Balance: ${balance?.toString() ?? '-'}`}</div>
+          <div>{`UTXOs of ${address}, utxos with confirmation < 1 are filtered out`}</div>
+        </section>
+        <section>
+          <table className="w-full border-slate-400 mb-4">
+            <thead>
+              <tr>
+                {['tx count', 'output count', 'value', 'coinday'].map((name) => (
+                  <th key={name} className="px-2 text-left border border-slate-300">
+                    {name}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="px-2 border border-slate-300">{new Set(list.map((u) => u.tx_hash)).size}</td>
+                <td className="px-2 border border-slate-300">{list.length}</td>
+                <td className="px-2 border border-slate-300">
+                  {list.reduce((acc, cur) => acc + BigInt(`0x${cur.value_hex}`), BigInt(0)).toString()}
+                </td>
+                <td className="px-2 border border-slate-300">
+                  {list
+                    .reduce((acc, cur) => acc + (cur.coinday === '-' ? BigInt(0) : BigInt(cur.coinday)), BigInt(0))
+                    .toString()}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <table className="w-full border-slate-400">
+            <thead>
+              <tr>
+                {['tx hash', 'output n', 'value', 'days', 'coinday'].map((name) => (
+                  <th key={name} className="px-2 text-left border border-slate-300">
+                    {name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((utxo) => (
+                <tr key={utxo.tx_hash_big_endian + utxo.tx_output_n}>
+                  <td className="px-2 border border-slate-300">
+                    <a href={`${EXPLORER}/tx/${utxo.tx_hash_big_endian}`} rel="noopener noreferrer" target="_blank">
+                      <code>{utxo.tx_hash_big_endian}</code>
+                    </a>
+                  </td>
+                  <td className="px-2 border border-slate-300">{utxo.tx_output_n}</td>
+                  <td className="px-2 border border-slate-300">{BigInt(`0x${utxo.value_hex}`).toString()}</td>
+                  <td className="px-2 border border-slate-300">{utxo.days}</td>
+                  <td className="px-2 border border-slate-300">{utxo.coinday}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      </div>
     )
   }
   return (
