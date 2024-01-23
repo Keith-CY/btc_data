@@ -1,4 +1,4 @@
-import { API_ENDPOINT } from './constant'
+import { API_ENDPOINT, HIRO_ENDPOINT } from './constant'
 
 export module BlockchainResponse {
   export interface UTXO {
@@ -67,16 +67,37 @@ export module BlockchainResponse {
   }
 }
 
+export module OKXResponse {
+  export interface Ordinal {}
+}
+
+const request = (url: string, init?: RequestInit) => fetch(url, init).then((res) => res.json())
+
 export const getUTXOs: (
   address: string,
   options?: Partial<Record<'confirmations' | 'limit', string>>
 ) => Promise<{
   unspent_outputs: Array<BlockchainResponse.UTXO>
 }> = async (address, options = { confirmations: '1', limit: '1000' }) =>
-  fetch(`${API_ENDPOINT}/unspent?${new URLSearchParams({ ...options, active: address })}`).then((res) => res.json())
+  request(`${API_ENDPOINT}/unspent?${new URLSearchParams({ ...options, active: address })}`)
 
 export const getTx: (hash: string) => Promise<BlockchainResponse.Tx> = (hash) =>
-  fetch(`${API_ENDPOINT}/rawtx/${hash}`).then((res) => res.json())
+  request(`${API_ENDPOINT}/rawtx/${hash}`)
 
 export const getBalance: (address: string) => Promise<{ [address: string]: BlockchainResponse.Balance }> = (address) =>
-  fetch(`${API_ENDPOINT}/balance?${new URLSearchParams({ active: address })}`).then((res) => res.json())
+  request(`${API_ENDPOINT}/balance?${new URLSearchParams({ active: address })}`)
+
+export const getInscriptions = (address: string) =>
+  request(`${HIRO_ENDPOINT}/ordinals/v1/inscriptions?${new URLSearchParams({ address })}`)
+
+export const getBrc20Balance = (
+  address: string,
+  ticker: string,
+  options?: Record<'limit' | 'offset', string>
+): Promise<Record<'ticker' | 'available_balance' | 'transferrable_balance' | 'overall_balance', string>> =>
+  request(
+    `${HIRO_ENDPOINT}/ordinals/v1/brc-20/balances/${address}?${new URLSearchParams({
+      ticker,
+      ...options,
+    })}`
+  ).then((res) => res.results[0])
